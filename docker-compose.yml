@@ -1,0 +1,67 @@
+version: "2.1"
+
+services:
+  db:
+    image: mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: manager
+      MYSQL_USER: manager
+      MYSQL_PASSWORD: manager
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: "/usr/bin/mysql --user=manager --password=manager manager --execute \"use manager;\""
+      interval: 3s
+      timeout: 1s
+      retries: 15
+
+  workers:
+    image: aljeshishe/manager
+    command: python3 run.py -c docker workers
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+  web:
+    image: aljeshishe/manager
+    command: python3 run.py -c docker run
+#    volumes:
+#      - .:/app
+    ports:
+      - "80:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  start:
+    image: aljeshishe/manager
+    depends_on:
+      - web
+      - workers
+
+  db_upgrade:
+    image: aljeshishe/manager
+    command: >
+        /bin/bash -c "
+        python3 run.py -c docker db init;
+        python3 run.py -c docker db migrate -m initial;
+        python3 run.py -c docker db upgrade;
+        python3 run.py -c docker db seed;"
+    depends_on:
+      db:
+        condition: service_healthy
+
+#  db_upgrade:
+#    image: aljeshishe/manager
+#    command: python3 run.py -c docker db upgrade
+#    depends_on:
+#      db:
+#        condition: service_healthy
+
+volumes:
+  db:
